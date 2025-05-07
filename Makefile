@@ -6,15 +6,23 @@ SYSROOT   = $(shell $(CC) --print-sysroot)
 
 PROCS     = -j4
 
-OBJS      = libpicofe/input.o libpicofe/in_sdl.o libpicofe/linux/in_evdev.o libpicofe/linux/plat.o libpicofe/fonts.o libpicofe/readpng.o libpicofe/config_file.o cheat.o config.o content.o core.o menu.o main.o options.o overrides.o patch.o scale.o scaler_neon.o unzip.o util.o
+# Detect architecture for conditional object inclusion
+ARCH ?= $(shell $(CC) -dumpmachine | cut -d- -f1)
+
+# Only include scaler_neon.o for ARM architectures, scaler_stub.o for others
+ifeq ($(filter $(ARCH),arm aarch64),)
+OBJS      = libpicofe/input.o libpicofe/in_sdl.o libpicofe/linux/in_evdev.o libpicofe/linux/plat.o libpicofe/fonts.o libpicofe/readpng.o libpicofe/config_file.o cheat.o config.o content.o core.o menu.o main.o options.o overrides.o patch.o scale.o scaler_stub.o unzip.o util.o buffer.o
+else
+OBJS      = libpicofe/input.o libpicofe/in_sdl.o libpicofe/linux/in_evdev.o libpicofe/linux/plat.o libpicofe/fonts.o libpicofe/readpng.o libpicofe/config_file.o cheat.o config.o content.o core.o menu.o main.o options.o overrides.o patch.o scale.o scaler_neon.o unzip.o util.o buffer.o
+endif
 
 BIN       = picoarch
 
 CFLAGS     += -Wall
-CFLAGS     += -fdata-sections -ffunction-sections -DPICO_HOME_DIR='"/.picoarch/"' -flto
+CFLAGS     += -fdata-sections -ffunction-sections -DPICO_HOME_DIR='"/.picoarch/"'
 CFLAGS     += -I./ -I./libretro-common/include/ $(shell $(SYSROOT)/usr/bin/sdl-config --cflags)
 
-LDFLAGS    = -lc -ldl -lgcc -lm -lSDL -lpng12 -lz -Wl,--gc-sections -flto
+LDFLAGS    = -lc -ldl -lgcc -lm -lSDL -lpng12 -lz -Wl,--gc-sections
 
 PATCH = git apply
 
@@ -79,12 +87,13 @@ else ifeq ($(platform), sf3000)
     OBJS += plat_sf3000.o
 	CFLAGS += -DPLATFORM_SF3000
 	CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/include
-	CFLAGS += --sysroot=/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot
+    CFLAGS += --sysroot=/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot
     CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/opt/ext-toolchain/sysroot/mipsel-r2-soft/usr/include
-	CFLAGS += -march=mips32r2 -mtune=mips32r2 -msoft-float -fPIC -DCONTENT_DIR='"/mnt/SDCARD/Roms"'
+    CFLAGS += -I.
+    CFLAGS += -march=mips32r2 -mtune=mips32r2 -mhard-float -fPIC -DCONTENT_DIR='"/mnt/SDCARD/Roms"'
     LDFLAGS += -fPIC
 	LDFLAGS += -L/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/lib -lpng16 -lz
-	CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/include
+    CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/include
 endif
 
 ifeq ($(DEBUG), 1)
@@ -136,7 +145,7 @@ clean-libpicofe:
 plat_miyoomini.o: plat_sdl.c
 plat_trimui.o: plat_sdl.c
 plat_linux.o: plat_sdl.c
-plat_sf3000.o: plat_sdl.c
+# plat_sf3000.o: plat_sdl.c
 
 $(BIN): libpicofe/.patched $(OBJS)
 	$(CC) $(OBJS) $(LDFLAGS) -o $(BIN)
@@ -157,7 +166,12 @@ clone-$(1):
 $(1):
 	git clone $(if $($1_REVISION),,--depth 1) --recursive $$($(1)_REPO) $(1)
 	$(if $1_REVISION,cd $(1) && git checkout $($1_REVISION),)
-	(test ! -d patches/$(1)) || (cd $(1) && $(foreach $(PATCH), $(sort $(wildcard patches/$(1)/*.patch)), $(PATCH) -p1 < ../$(patch) &&) true)
+	if [ -d patches/$(1) ]; then \
+		cd $(1) && \
+		for patch in ../patches/$(1)/*.patch; do \
+			git apply -p1 < $$patch || exit 1; \
+		done; \
+	fi
 
 $(1)_libretro.so: $(1)
 	cd $$($1_BUILD_PATH) && $$($1_MAKE) $(PROCS)

@@ -5,6 +5,36 @@
 #include "libpicofe/in_sdl.h"
 #include "main.h"
 #include "util.h"
+#include "buffer.h"
+
+#define SAMPLE_RATE 48000
+
+// Global variables required by buffer.c
+struct GFX_Buffer buffer = {0};
+struct GFX_Scaler scaler = {0};
+
+// Use extern for variables defined in other files
+extern double aspect_ratio;
+extern enum scale_size scale_size;
+
+// Use enum value from scale.h
+#define SCALE_SIZE_ASPECT SCALE_SIZE_ASPECT
+
+// Platform-specific buffer implementations
+void buffer_renew_surface(unsigned w, unsigned h, size_t pitch) {
+    // SF3000-specific surface renewal logic
+    // TODO: Implement SF3000-specific surface renewal
+}
+
+void buffer_clear(void) {
+    // SF3000-specific buffer clearing
+    // TODO: Implement SF3000-specific buffer clearing
+}
+
+void buffer_quit_platform(void) {
+    // SF3000-specific cleanup
+    // TODO: Implement SF3000-specific cleanup
+}
 
 #define SAMPLE_RATE 48000
 

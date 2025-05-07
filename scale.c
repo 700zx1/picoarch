@@ -109,7 +109,7 @@ static inline int gcd(int a, int b) {
 }
 
 static void scale_null(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {}
-static void scale1x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {
+void scale1x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {
 	scale1x_n16(src, dst+dst_offs, w, h, pitch, SCREEN_PITCH);
 	return;
 
@@ -119,7 +119,7 @@ static void scale1x(unsigned w, unsigned h, size_t pitch, const void *src, void 
 	}
 }
 
-static void scale2x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {
+void scale2x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {
 	scale2x_n16(src, dst+dst_offs, w, h, pitch, SCREEN_PITCH);
 	return;
 	
@@ -189,7 +189,7 @@ static void scale2x_scanline(unsigned w, unsigned h, size_t pitch, const void *s
 	}
 }
 
-static void scale3x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {
+void scale3x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst) {
 	scale3x_n16(src, dst+dst_offs, w, h, pitch, SCREEN_PITCH);
 	return;
 

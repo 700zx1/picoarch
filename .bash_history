@@ -114,3 +114,77 @@ make platform=sf3000
 ls /opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/include/
 exit
 exit
+ls
+cd libretro-common/
+ls
+cd ..
+ls
+make platform=sf3000
+make clean
+exit
+make platform=sf3000
+make clean
+exit
+make clean
+make platform=sf3000
+exit
+make clean
+make platform=sf3000
+exit
+make clean
+make platform=sf3000
+make clean
+exit
+make platform=sf3000
+exit
+make clean
+make platform=sf3000
+make clean
+exit
+make clean
+make platform=sf3000
+make clean
+make platform=sf3000 V=1
+exit
+make clean
+make platform=sf3000 clean
+make platform=sf3000 V=1
+make clean
+exit
+make clean
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+exit
+make clean
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
+make platform=sf3000 V=1
+make clean
+exit
