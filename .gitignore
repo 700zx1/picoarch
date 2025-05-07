@@ -1,6 +1,5 @@
 *.o
 *.so
-picoarch
 /pkg
 /profile
 /system
