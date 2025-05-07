@@ -12,6 +12,7 @@
 
 static SDL_Surface* screen;
 
+#ifndef PLATFORM_SF3000
 // begin miyoo hardware scaling support
 // loosely based on eggs' picogpsp gfx.c
 #include <mi_sys.h>
@@ -325,6 +326,7 @@ static void buffer_scale(unsigned w, unsigned h, size_t pitch, const void *src) 
 }
 
 // end miyoo hardware scaling support
+#endif
 
 struct audio_state {
 	unsigned buf_w;

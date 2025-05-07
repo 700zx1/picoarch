@@ -74,6 +74,17 @@ else ifeq ($(platform), miyoomini)
 else ifeq ($(platform), unix)
 	OBJS += plat_linux.o
 	LDFLAGS += -fPIE
+else ifeq ($(platform), sf3000)
+    CROSS_COMPILE = /opt/mipsel-buildroot-linux-gnu_sdk-buildroot/bin/mips-mti-linux-gnu-
+    OBJS += plat_sf3000.o
+	CFLAGS += -DPLATFORM_SF3000
+	CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/include
+	CFLAGS += --sysroot=/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot
+    CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/opt/ext-toolchain/sysroot/mipsel-r2-soft/usr/include
+	CFLAGS += -march=mips32r2 -mtune=mips32r2 -msoft-float -fPIC -DCONTENT_DIR='"/mnt/SDCARD/Roms"'
+    LDFLAGS += -fPIC
+	LDFLAGS += -L/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/lib -lpng16 -lz
+	CFLAGS += -I/opt/mipsel-buildroot-linux-gnu_sdk-buildroot/mipsel-buildroot-linux-gnu/sysroot/usr/include
 endif
 
 ifeq ($(DEBUG), 1)
@@ -125,6 +136,7 @@ clean-libpicofe:
 plat_miyoomini.o: plat_sdl.c
 plat_trimui.o: plat_sdl.c
 plat_linux.o: plat_sdl.c
+plat_sf3000.o: plat_sdl.c
 
 $(BIN): libpicofe/.patched $(OBJS)
 	$(CC) $(OBJS) $(LDFLAGS) -o $(BIN)
