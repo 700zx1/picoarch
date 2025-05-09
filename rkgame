@@ -1,0 +1,80 @@
+#!/bin/sh
+
+# This script is used to launch the rkgame binary with specific environment variables on the SF3000 console.
+# It redirects all I/O to /dev/console and logs the output to a specified log file.
+# The script also attempts to launch a terminal shell if available, and finally executes the rkgame binary with any provided arguments.
+# This script is intended to be run on the SF3000 console.
+
+LOGFILE="/mnt/sdcard/cubegm/rkgame_log.txt"
+REAL_EXEC="/mnt/sdcard/cubegm/rkgame.bin"
+TERMINAL_BIN="/mnt/sdcard/cubegm/sh"
+
+# Set environment variables for SDL
+#export SDL_DEBUG=1
+export SDL_NOMOUSE=1
+#export SDL_MOUSEDRV=IMPS2
+export SDL_AUDIODRIVER=dummy
+#export SDL_PATH_DSP=/dev/dsp
+#export SDL_FBDEV=/dev/fb0
+#fbset -fb /dev/fb0 -g 640 480 640 480 32
+#fbset -fb /dev/fb0 -f 1280 720 1280 720 32
+#export SDL_VIDEODRIVER=fbcon ?
+#export SDL_VIDEODRIVER=directfb ?
+#export SDL_AUDIODRIVER=alsa
+#export DISPLAY=:0
+#export SDL_RENDER_DRIVER=software
+#export SDL_RENDER_DRIVER=opengl
+#export SDL_RENDER_DRIVER=opengles ?
+#export SDL_VIDEODRIVER=x11
+
+START_TIME=$(date +%s)
+echo "[`date +%H:%M:%S`] [INFO] Redirecting I/O to /dev/console..." >> "$LOGFILE"
+
+# Redirect all I/O to console
+exec </dev/console >/dev/console 2>&1
+
+echo "[`date +%H:%M:%S`] [INFO] Attempting to verify console access with test output..." >> "$LOGFILE"
+echo "SF3000 Console Test: If you see this, /dev/console is active." > /dev/console
+
+if [ -x "$TERMINAL_BIN" ]; then
+  echo "[`date +%H:%M:%S`] [INFO] Launching terminal shell in forced interactive mode..." >> "$LOGFILE"
+  "$TERMINAL_BIN" -i
+else
+  echo "[`date +%H:%M:%S`] [WARN] Terminal shell not found. Skipping to rkgame.bin..." >> "$LOGFILE"
+fi
+# Check environment variables
+echo "[`date +%H:%M:%S`] [INFO] Environment variables:" >> "$LOGFILE"
+echo "SDL_VIDEODRIVER=$SDL_VIDEODRIVER" >> "$LOGFILE"
+echo "SDL_AUDIODRIVER=$SDL_AUDIODRIVER" >> "$LOGFILE"
+echo "SDL_RENDER_DRIVER=$SDL_RENDER_DRIVER" >> "$LOGFILE"
+echo "DISPLAY=$DISPLAY" >> "$LOGFILE"
+echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$LOGFILE"
+echo "HOME=$HOME" >> "$LOGFILE"
+echo "PATH=$PATH" >> "$LOGFILE"
+echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$LOGFILE"
+echo "SDL_PATH_DSP=$SDL_PATH_DSP" >> "$LOGFILE"
+
+aplay -l >> "$LOGFILE" 2>&1
+
+echo "[`date +%H:%M:%S`] [INFO] Listing available framebuffers..." >> "$LOGFILE"
+echo "fbset -fb /dev/fb0" >> "$LOGFILE"
+for fb in /dev/fb*; do
+  if [ -e "$fb" ]; then
+    echo "Framebuffer: $fb" >> "$LOGFILE"
+    fbset -fb "$fb" >> "$LOGFILE" 2>&1
+  fi
+done
+
+echo "[`date +%H:%M:%S`] [INFO] Proceeding to rkgame.bin..." >> "$LOGFILE"
+
+if [ ! -x "$REAL_EXEC" ]; then
+  echo "[`date +%H:%M:%S`] [ERROR] rkgame.bin not found or not executable" >> "$LOGFILE"
+  exit 1
+fi
+
+"$REAL_EXEC" "$@" >> "$LOGFILE" 2>&1
+EXIT_CODE=$?
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+echo "[`date +%H:%M:%S`] [INFO] rkgame exited with code $EXIT_CODE after ${DURATION}s" >> "$LOGFILE"

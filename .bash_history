@@ -58,3 +58,6 @@ exit
 make platform=sf3000 V=1
 make clean platform=sf3000
 exit
+make platform=sf3000 V=1
+make clean platform=sf3000
+exit

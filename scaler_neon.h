@@ -1,6 +1,6 @@
 // disable neon scaler compiling for now
-//#ifndef __SCALER_NEON_H__
-//#define __SCALER_NEON_H__
+#ifndef __SCALER_NEON_H__
+#define __SCALER_NEON_H__
 #include <stdint.h>
 
 // Use C scalers for MIPS architecture
@@ -44,4 +44,4 @@ void scale6x_n32(void* __restrict src, void* __restrict dst, uint32_t sw, uint32
 
 #endif // USE_C_SCALER
 
-//#endif // __SCALER_NEON_H__
+#endif // __SCALER_NEON_H__
