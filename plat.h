@@ -3,6 +3,9 @@
 
 #include "libpicofe/plat.h"
 
+// Define sample rate for audio after SDL1.2 conversion
+#define SAMPLE_RATE 48000
+
 struct audio_frame {
 	int16_t left;
 	int16_t right;

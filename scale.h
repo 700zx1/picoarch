@@ -27,9 +27,6 @@ enum scale_effect {
 
 void scale_update_scaler(void);
 void scale(unsigned w, unsigned h, size_t pitch, const void *src, void *dst);
-void scale1x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst);
-void scale2x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst);
-void scale3x(unsigned w, unsigned h, size_t pitch, const void *src, void *dst);
 
 int scale_clean(const void *src, void *dst);
 

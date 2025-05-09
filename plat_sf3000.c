@@ -5,39 +5,28 @@
 #include "libpicofe/in_sdl.h"
 #include "main.h"
 #include "util.h"
-#include "buffer.h"
+#include "scale.h"
+#include "scaler_neon.h"
+#include "plat.h"
 
-#define SAMPLE_RATE 48000
+// Video system
+static SDL_Surface* screen;
+static SDL_Surface* clean_screen;
+static Uint32 video_flags = SDL_SWSURFACE;
 
-// Global variables required by buffer.c
-struct GFX_Buffer buffer = {0};
-struct GFX_Scaler scaler = {0};
-
-// Use extern for variables defined in other files
-extern double aspect_ratio;
-extern enum scale_size scale_size;
-
-// Use enum value from scale.h
-#define SCALE_SIZE_ASPECT SCALE_SIZE_ASPECT
-
-// Platform-specific buffer implementations
-void buffer_renew_surface(unsigned w, unsigned h, size_t pitch) {
-    // SF3000-specific surface renewal logic
-    // TODO: Implement SF3000-specific surface renewal
+// Minimal stubs for SDL1.2-only platform
+void buffer_init(void) {}
+void buffer_quit(void) {}
+void buffer_scale(int w, int h, int pitch, void *data) {
+    // Optionally, implement SDL_BlitSurface or similar here if scaling is needed.
 }
 
-void buffer_clear(void) {
-    // SF3000-specific buffer clearing
-    // TODO: Implement SF3000-specific buffer clearing
-}
+// plat_sf3000.c
+// Only platform-specific overrides or stubs for sf3000. All common SDL1.2 code is now provided by plat_sdl.c.
 
-void buffer_quit_platform(void) {
-    // SF3000-specific cleanup
-    // TODO: Implement SF3000-specific cleanup
-}
+// Add platform-specific code here only if needed.
 
-#define SAMPLE_RATE 48000
-
+// Input system
 static const struct in_default_bind in_sdl_defbinds[] = {
 	{ SDLK_UP,        IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_UP },
 	{ SDLK_DOWN,      IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_DOWN },
@@ -49,10 +38,10 @@ static const struct in_default_bind in_sdl_defbinds[] = {
 	{ SDLK_LALT,      IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_Y },
 	{ SDLK_RETURN,    IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_START },
 	{ SDLK_RCTRL,     IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_SELECT },
-	{ SDLK_e,         IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_L },
-	{ SDLK_t,         IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_R },
-	{ SDLK_TAB,       IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_L2 },
-	{ SDLK_BACKSPACE, IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_R2 },
+	{ SDLK_TAB,       IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_L },
+	{ SDLK_BACKSPACE, IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_R },
+	{ SDLK_q,         IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_L2 },
+	{ SDLK_BACKSLASH, IN_BINDTYPE_PLAYER12, RETRO_DEVICE_ID_JOYPAD_R2 },
 	{ SDLK_ESCAPE,    IN_BINDTYPE_EMU, EACTION_MENU },
 	{ 0, 0, 0 }
 };
@@ -67,8 +56,8 @@ const struct menu_keymap in_sdl_key_map[] =
 	{ SDLK_LCTRL,     PBTN_MBACK },
 	{ SDLK_LALT,      PBTN_MA2 },
 	{ SDLK_LSHIFT,    PBTN_MA3 },
-	{ SDLK_e,         PBTN_L },
-	{ SDLK_t,         PBTN_R },
+	{ SDLK_TAB,       PBTN_L },
+	{ SDLK_BACKSPACE, PBTN_R },
 	{ SDLK_ESCAPE,    PBTN_MENU },
 };
 
@@ -95,10 +84,8 @@ static const char * const in_sdl_key_names[SDLK_LAST] = {
 	[SDLK_LALT]       = "Y",
 	[SDLK_RETURN]     = "START",
 	[SDLK_RCTRL]      = "SELECT",
-	[SDLK_e]          = "L",
-	[SDLK_t]          = "R",
-	[SDLK_TAB]        = "L2",
-	[SDLK_BACKSPACE]  = "R2",
+	[SDLK_TAB]        = "L",
+	[SDLK_BACKSPACE]  = "R",
 	[SDLK_1]          = "MENU+UP",
 	[SDLK_2]          = "MENU+DOWN",
 	[SDLK_3]          = "MENU+LEFT",
@@ -112,8 +99,6 @@ static const char * const in_sdl_key_names[SDLK_LAST] = {
 	[SDLK_q]          = "MENU+L",
 	[SDLK_BACKSLASH]  = "MENU+R",
 	[SDLK_ESCAPE]     = "MENU",
-	[SDLK_ESCAPE]     = "MENU",
-	[SDLK_POWER]      = "POWER",
 };
 
 static const struct mod_keymap in_sdl_mod_keymap[] = {

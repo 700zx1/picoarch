@@ -1,0 +1,23 @@
+Always follow these important rules:
+
+1: Implement a basic SDL1.2 system for the sf3000 using existing code when possible.
+2: When platform specific code is needed for the sf3000, add this code to plat_sf3000.c
+3: Use existing scaler in scale.c and scale.h.  Add any needed platform specific code to plat_sdl.c and plat_sf3000.c
+4: Exclude Miyoo Mini Hadrware scaling with platform specific conditional includes or exlcudes in plat_sdl.c
+5: Add missing video init and buffer functionality to plat_sdl.c and plat_sf3000.c
+6: Add platform target for sf3000 to the Makefile, for the mips Architecture.
+7: Always review the @workspace for integration after implementing new code.
+8: Only continue writing new code once integration errors have been fixed.
+
+Guidance for SDL1.2 Usage
+You should use SDL1.2 for video, input, and (if possible) audio on sf3000.
+Only write direct platform code in plat_sf3000.c if SDL1.2 cannot provide the needed functionality or if there are hardware-specific requirements.
+Reuse existing code in plat_sdl.c where possible.
+If a function in plat_sdl.c works unchanged for sf3000, you can call it from plat_sf3000.c or even share code with conditional compilation.
+Platform-specific code in plat_sf3000.c should only be for:
+Hardware quirks not handled by SDL1.2
+Workarounds for SDL limitations on sf3000
+Integration points required by the main application (e.g., missing platform functions)
+When implementing or fixing functions in plat_sf3000.c, first check if the equivalent in plat_sdl.c (or other SDL-based code) can be reused.
+Only write “bare metal” or direct MIPS code if SDL1.2 is insufficient for the task.
+Keep your Makefile and build system targeting SDL1.2 for sf3000 unless you encounter a blocker.

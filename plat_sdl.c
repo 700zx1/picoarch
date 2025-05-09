@@ -1,7 +1,5 @@
 #include <SDL/SDL.h>
-#include <stdio.h>
 #include <unistd.h>
-#include "buffer.h"
 #include <math.h>
 #include "core.h"
 #include "libpicofe/fonts.h"
@@ -14,8 +12,8 @@
 
 static SDL_Surface* screen;
 
-#ifndef PLATFORM_SF3000
 // begin miyoo hardware scaling support
+#ifndef PLATFORM_SF3000
 // loosely based on eggs' picogpsp gfx.c
 #include <mi_sys.h>
 #include <mi_gfx.h>
@@ -118,8 +116,37 @@ void GFX_BlitSurfaceExec(SDL_Surface *src, SDL_Rect *srcrect, SDL_Surface *dst, 
 	} else SDL_BlitSurface(src, srcrect, dst, dstrect);
 }
 
-struct GFX_Buffer buffer;
-struct GFX_Scaler scaler;
+struct GFX_Buffer {
+	MI_PHY		phyAddr;
+	void*		virAddr;
+	int 		width;
+	int 		height;
+	int 		depth;
+	int 		pitch;
+	uint32_t 	size;
+};
+
+typedef scale_neon_t scale_func_t;
+
+
+struct GFX_Scaler {
+	scale_func_t upscale;
+	
+	int src_w;
+	int src_h;
+	int src_p;
+	
+	int dst_w;
+	int dst_h;
+	int dst_p;
+	
+	int asp_x;
+	int asp_y;
+	int asp_w;
+	int asp_h;
+};
+static struct GFX_Buffer buffer;
+static struct GFX_Scaler scaler;
 static SDL_Surface* scaled = NULL;
 
 static uint16_t* dst_buf = NULL;
@@ -167,8 +194,7 @@ static void buffer_upscale(unsigned src_w, unsigned src_h, size_t src_p, const v
 	}
 }
 
-// buffer_init implemented in buffer.c
-void buffer_init(void);
+static void buffer_init(void) {
 	buffer.width  = 1280;
 	buffer.height =  960;
 	buffer.depth  =   16;
@@ -178,19 +204,12 @@ void buffer_init(void);
 	if (MI_SYS_MMA_Alloc(NULL, ALIGN4K(buffer.size), &buffer.phyAddr)) return;
 	MI_SYS_MemsetPa(buffer.phyAddr, 0, buffer.size);
 	MI_SYS_Mmap(buffer.phyAddr, ALIGN4K(buffer.size), &buffer.virAddr, TRUE);
-
+	
 	PA_INFO("buffer_init()\n"); fflush(stdout);
-
+	
 	memset(&scaler, 0, sizeof(struct GFX_Scaler));
 }
-	buffer.width  = 1280;
-	buffer.height =  960;
-	buffer.depth  =   16;
-	buffer.pitch  = buffer.width * SCREEN_BPP;
-	buffer.size = buffer.pitch * buffer.height;
-
-// buffer_quit implemented in buffer.c
-void buffer_quit(void);
+static void buffer_quit(void) {
 	if (buffer.phyAddr) {
 		MI_SYS_Munmap(buffer.virAddr, ALIGN4K(buffer.size));
 		MI_SYS_MMA_Free(buffer.phyAddr);
@@ -200,16 +219,14 @@ void buffer_quit(void);
 		SDL_FreeSurface(scaled);
 		scaled = NULL;
 	}
-
+	
 	if (dst_buf) free(dst_buf);
 }
-
 static void buffer_clear(void) {
 	PA_INFO("buffer_clear()\n"); fflush(stdout);
 	MI_SYS_FlushInvCache(buffer.virAddr, ALIGN4K(buffer.size));
 	MI_SYS_MemsetPa(buffer.phyAddr, 0, buffer.size);
 }
-
 static void buffer_renew_surface(int src_w, int src_h, int src_p) {
 	if (scaled) {
 		PA_INFO("freed %ix%i surface\n", scaled->w, scaled->h); fflush(stdout);
@@ -235,9 +252,12 @@ static void buffer_renew_surface(int src_w, int src_h, int src_p) {
 	// int s = sx<sy ? sx : sy;
 	//
 	// if (s>max_upscale) s = max_upscale;
-	
-	if (s>6) s = 6;
-	switch(s) {
+	if (s > max_upscale)
+		s = max_upscale;
+	if (s < 1)
+		s = 1;
+
+	switch (s) {
 		case 1: scaler.upscale = scale1x_n16; break;
 		case 2: scaler.upscale = scale2x_n16; break;
 		case 3: scaler.upscale = scale3x_n16; break;
@@ -246,8 +266,7 @@ static void buffer_renew_surface(int src_w, int src_h, int src_p) {
 		case 6: scaler.upscale = scale6x_n16; break;
 		// TODO: make an 8x version?
 	}
-	
-	
+
 	scaler.dst_w = src_w * s;
 	scaler.dst_h = src_h * s;
 	scaler.dst_p = scaler.dst_w * SCREEN_BPP;
@@ -255,54 +274,9 @@ static void buffer_renew_surface(int src_w, int src_h, int src_p) {
 	scaled = SDL_CreateRGBSurfaceFrom(buffer.virAddr,scaler.dst_w,scaler.dst_h,buffer.depth,scaler.dst_p,0,0,0,0);
 	if (scaled != NULL) scaled->pixelsPa = buffer.phyAddr;
 	PA_INFO("created %ix%i surface (%ix)\n", scaler.dst_w, scaler.dst_h, s); fflush(stdout);
+	// buffer_clear();
 }
-
-// buffer_scale implemented in buffer.c
-void buffer_scale(unsigned w, unsigned h, size_t pitch, const void *src);
-	bool update_asp = false;
-	// static int scaler_max_upscale;
-	if (w!=scaler.src_w || h!=scaler.src_h || pitch!=scaler.src_p) { //  || scaler_max_upscale!=max_upscale
-		// scaler_max_upscale = max_upscale;
-		buffer_renew_surface(w,h,pitch);
-		update_asp = true;
-	}
-
-	static int scaler_mode;
-	if (scaler_mode!=scale_size) {
-		scaler_mode = scale_size;
-		update_asp = true;
-	}
-
-	if (update_asp) {
-		PA_INFO("update aspect ratio\n"); fflush(stdout);
-		buffer_clear();
-
-		if (aspect_ratio<=0) aspect_ratio = (float)scaler.src_w / scaler.src_h;
-
-		if (scale_size==SCALE_SIZE_ASPECT) {
-			scaler.asp_w = SCREEN_HEIGHT * aspect_ratio;
-			scaler.asp_h = SCREEN_HEIGHT;
-			if (scaler.asp_w>SCREEN_WIDTH) {
-				scaler.asp_w = SCREEN_WIDTH;
-				scaler.asp_h = SCREEN_WIDTH / aspect_ratio;
-			}
-
-			scaler.asp_x = (SCREEN_WIDTH - scaler.asp_w) / 2;
-		}
-	}
-
-	// buffer_upscale_nn(src);
-	// buffer_upscale(scaler.src_w,scaler.src_h,scaler.src_p,src,
-	// 		scaler.dst_w,scaler.dst_h,scaler.dst_p,buffer.virAddr);
-	scaler.upscale(src, buffer.virAddr,scaler.src_w,scaler.src_h,scaler.src_p,scaler.dst_p);
-
-	if (scale_size==SCALE_SIZE_ASPECT) {
-		GFX_BlitSurfaceExec(scaled, NULL, screen, &(SDL_Rect){scaler.asp_x, scaler.asp_y, scaler.asp_w, scaler.asp_h},0,0,0);
-	}
-	else {
-		GFX_BlitSurfaceExec(scaled, NULL, screen, NULL,0,0,0);
-	}
-}
+static void buffer_scale(unsigned w, unsigned h, size_t pitch, const void *src) {
 	bool update_asp = false;
 	// static int scaler_max_upscale;
 	if (w!=scaler.src_w || h!=scaler.src_h || pitch!=scaler.src_p) { //  || scaler_max_upscale!=max_upscale
@@ -357,8 +331,10 @@ void buffer_scale(unsigned w, unsigned h, size_t pitch, const void *src);
 	// }
 }
 
-// end miyoo hardware scaling support
-#endif
+#endif // end miyoo hardware scaling support
+
+
+//begin PLATFORM_SF3000
 
 struct audio_state {
 	unsigned buf_w;
@@ -605,11 +581,7 @@ unsigned plat_cpu_ticks(void)
 	if (!fscanf(file, "%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu", &ticks))
 		goto finish;
 
-//	#ifdef _SC_CLK_TCK
-    ticksps = sysconf(_SC_CLK_TCK);
-//#else
-//   ticksps = 100; // Fallback value for non-POSIX
-//#endif
+	ticksps = sysconf(_SC_CLK_TCK);
 
 	if (ticksps)
 		ticks = ticks * 100 / ticksps;
@@ -768,14 +740,21 @@ void plat_sdl_event_handler(void *event_)
 
 int plat_init(void)
 {
-	SDL_Init(SDL_INIT_VIDEO);
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        PA_ERROR("%s, SDL_Init failed: %s\n", __func__, SDL_GetError());
+        return -1;
+    }
 	screen = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8, SDL_SWSURFACE);
 	if (screen == NULL) {
-		PA_ERROR("%s, failed to set video mode\n", __func__);
+		PA_ERROR("%s, failed to set video mode\n", __func__, SDL_GetError());
 		return -1;
 	}
 	
-	clean_screen = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8, 0,0,0,0);
+	clean_screen = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8, 0, 0, 0, 0);
+	if (clean_screen == NULL) {
+		PA_ERROR("%s, SDL_CreateRGBSurface failed: %s\n", __func__, SDL_GetError());
+		return -1;
+	}
 	
 	buffer_init();
 	

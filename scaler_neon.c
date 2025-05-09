@@ -3,6 +3,7 @@
 #include <string.h>
 #include "scaler_neon.h"
 
+#ifndef USE_C_SCALER
 //
 //	arm NEON / C integer scalers for miyoomini
 //	args/	src :	src offset		address of top left corner
@@ -563,7 +564,7 @@ void scale4x_n32(void* __restrict src, void* __restrict dst, uint32_t sw, uint32
 	);
 }
 
-static inline void scale5x_n16line(void* src, void* dst, uint32_t swl) {
+void scale5x_n16line(void* src, void* dst, uint32_t swl) {
 	asm volatile (
 	"	bic r4, %2, #15		;"	// r4 = swl16
 	"	add r3, %0, %2		;"	// r3 = lineend offset
@@ -690,12 +691,12 @@ static inline void scale6x_n16line(void* src, void* dst, uint32_t swl) {
 	"	bne 1b			;"
 	"2:	cmp %0, r3		;"
 	"	beq 4f			;"
-	"3:	ldrh r4, [%0],#2	;"	// rest
-	"	orr r4, r4, lsl #16	;"
-	"	vdup.32 d16, r4		;"
+	"3:	ldrh lr, [%0],#2	;"	// rest
+	"	orr lr, lr, lsl #16	;"
+	"	vdup.32 d16, lr		;"
 	"	cmp %0, r3		;"
 	"	vstmia %1!, {d16}	;"
-	"	str r4, [%1],#4		;"
+	"	str lr, [%1],#4		;"
 	"	bne 3b			;"
 	"4:				"
 	: "+r"(src), "+r"(dst)
@@ -762,6 +763,13 @@ void scale6x_n32(void* __restrict src, void* __restrict dst, uint32_t sw, uint32
 		dstsrc = dst; dst = (uint8_t*)dst+dp;
 		for (uint32_t i=5; i>0; i--, dst=(uint8_t*)dst+dp) memcpy_neon(dst, dstsrc, dwl);
 	}
+}
+#endif
+#ifdef USE_C_SCALER
+
+// C memcpy
+static inline void memcpy_c(void* dst, void* src, uint32_t size) {
+    memcpy(dst, src, size);
 }
 
 //
@@ -1039,3 +1047,4 @@ void scale6x_c32(void* __restrict src, void* __restrict dst, uint32_t sw, uint32
 		memcpy((uint8_t*)dst+dp*5, dst, swl);
 	}
 }
+#endif
