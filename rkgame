@@ -8,24 +8,41 @@
 LOGFILE="/mnt/sdcard/cubegm/rkgame_log.txt"
 REAL_EXEC="/mnt/sdcard/cubegm/rkgame.bin"
 TERMINAL_BIN="/mnt/sdcard/cubegm/sh"
+echo "[`date +%H:%M:%S`] [INFO] Script invoked." >> "$LOGFILE"
+uname -a >> "$LOGFILE" 2>&1
+echo "[`date +%H:%M:%S`] [INFO] Current user: $(whoami)" >> "$LOGFILE"
+
+# Check hidden display info from Data Frog
+cat /dev/dis >> "$LOGFILE" 2>&1
+cat /dev/hcge >> "$LOGFILE" 2>&1
+
+# Set permissions for the rkgame binary and terminal shell
+chmod u+s /mnt/sdcard/cubegm/rkgame.bin
+chmod u+s /mnt/sdcard/cubegm/sh
 
 # Set environment variables for SDL
-#export SDL_DEBUG=1
+export SDL_DEBUG=1
+#export SDL_LOG_PRIORITY=VERBOSE
 export SDL_NOMOUSE=1
 #export SDL_MOUSEDRV=IMPS2
 export SDL_AUDIODRIVER=dummy
 #export SDL_PATH_DSP=/dev/dsp
-#export SDL_FBDEV=/dev/fb0
+export SDL_FBDEV=/dev/fb0
 #fbset -fb /dev/fb0 -g 640 480 640 480 32
 #fbset -fb /dev/fb0 -f 1280 720 1280 720 32
-#export SDL_VIDEODRIVER=fbcon ?
-#export SDL_VIDEODRIVER=directfb ?
+#export SDL_VIDEODRIVER=fbcon
+export SDL_VIDEODRIVER=directfb
 #export SDL_AUDIODRIVER=alsa
-#export DISPLAY=:0
+export DISPLAY=:0
 #export SDL_RENDER_DRIVER=software
 #export SDL_RENDER_DRIVER=opengl
 #export SDL_RENDER_DRIVER=opengles ?
 #export SDL_VIDEODRIVER=x11
+
+#directfb environment variables
+export DIRECTFB_DEBUG=1
+export DIRECTFB_DRIVER=fbdev
+export DIRECTFB_LOG=/mnt/sdcard/cubegm/directfb.log
 
 START_TIME=$(date +%s)
 echo "[`date +%H:%M:%S`] [INFO] Redirecting I/O to /dev/console..." >> "$LOGFILE"
@@ -55,7 +72,14 @@ echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$LOGFILE"
 echo "SDL_PATH_DSP=$SDL_PATH_DSP" >> "$LOGFILE"
 
 aplay -l >> "$LOGFILE" 2>&1
+# Ensure /dev/fb0 is available
+fbset -fb /dev/fb0 | grep -q "geometry" >> "$LOGFILE" 2>&1
+if [ $? -ne 0 ]; then
+  echo "[ERROR] Framebuffer /dev/fb0 is not configured properly." >> "$LOGFILE"
+  exit 1
+fi
 
+# List available framebuffers
 echo "[`date +%H:%M:%S`] [INFO] Listing available framebuffers..." >> "$LOGFILE"
 echo "fbset -fb /dev/fb0" >> "$LOGFILE"
 for fb in /dev/fb*; do
@@ -64,6 +88,69 @@ for fb in /dev/fb*; do
     fbset -fb "$fb" >> "$LOGFILE" 2>&1
   fi
 done
+
+# Test if /dev/fb0 is writable
+echo "[`date +%H:%M:%S`] [INFO] Testing if /dev/fb0 is writable..." >> "$LOGFILE"
+if [ -w /dev/fb0 ]; then
+  echo "[`date +%H:%M:%S`] [INFO] /dev/fb0 is writable." >> "$LOGFILE"
+else
+  echo "[`date +%H:%M:%S`] [ERROR] /dev/fb0 is not writable. Attempting to write a test byte..." >> "$LOGFILE"
+  #echo -n " " > /dev/fb0 2>> "$LOGFILE"
+  # Test if you can write to the framebuffer
+  cat /dev/urandom > /dev/fb0
+  # You should see random pixels on screen
+  if [ $? -ne 0 ]; then
+    echo "[`date +%H:%M:%S`] [ERROR] Failed to write to /dev/fb0. Check permissions or framebuffer configuration." >> "$LOGFILE"
+    exit 1
+  else
+    echo "[`date +%H:%M:%S`] [INFO] Successfully wrote to /dev/fb0." >> "$LOGFILE"
+  fi
+fi
+
+# Reset the framebuffer
+dd if=/dev/zero of=/dev/fb0
+
+# Draw animated rectangle to fb0
+FB=/dev/fb0
+PIXEL_FILE=/tmp/argb_pixel
+LINE_FILE=/tmp/argb_line
+
+# Parse fbset output
+eval $(fbset -fb $FB -s | awk '
+/geometry/ {
+    printf("WIDTH=%s\nHEIGHT=%s\n", $2, $3);
+}
+/depth/ {
+    printf("BPP=%s\n", $2);
+}')
+
+BYTES_PER_PIXEL=$((BPP / 8))
+
+# Rectangle dimensions and position (centered)
+RECT_W=200
+RECT_H=100
+RECT_X=$(( (WIDTH - RECT_W) / 2 ))
+RECT_Y=$(( (HEIGHT - RECT_H) / 2 ))
+
+echo "Framebuffer: $WIDTH x $HEIGHT @ ${BPP}bpp"
+echo "Drawing $RECT_W x $RECT_H rectangle at $RECT_X,$RECT_Y"
+
+# Create one red ARGB8888 pixel (Alpha=0xFF, Red=0xFF, Green=0x00, Blue=0x00)
+printf '\xFF\xFF\x00\x00' > "$PIXEL_FILE"
+
+# Build one line of the rectangle
+dd if="$PIXEL_FILE" of="$LINE_FILE" bs=$BYTES_PER_PIXEL count=$RECT_W status=none
+
+# Draw the rectangle line by line using dd
+for y in $(seq 0 $((RECT_H - 1))); do
+    LINE_OFFSET=$(( ((RECT_Y + y) * WIDTH + RECT_X) * BYTES_PER_PIXEL ))
+    dd if="$LINE_FILE" of="$FB" bs=1 seek=$LINE_OFFSET conv=notrunc status=none
+done
+
+echo "Done."
+
+# Reset the framebuffer
+dd if=/dev/zero of=/dev/fb0
 
 echo "[`date +%H:%M:%S`] [INFO] Proceeding to rkgame.bin..." >> "$LOGFILE"
 
@@ -78,3 +165,13 @@ END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
 echo "[`date +%H:%M:%S`] [INFO] rkgame exited with code $EXIT_CODE after ${DURATION}s" >> "$LOGFILE"
+
+# Launch Busybox shell if available
+if [ -x /mnt/sdcard/cubegm/busybox ]; then
+  echo "[`date +%H:%M:%S`] [INFO] Launching Busybox shell..." >> "$LOGFILE" 2>&1
+  /mnt/sdcard/cubegm/busybox sh
+  exit $?  # Exit with the BusyBox shell's exit code
+else
+  echo "[`date +%H:%M:%S`] [ERROR] Busybox shell not found. Exiting..." >> "$LOGFILE"
+  exit 1  # Explicitly exit with an error code
+fi

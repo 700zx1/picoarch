@@ -9,6 +9,7 @@
 #include "scale.h"
 #include "scaler_neon.h"
 #include "util.h"
+#include "libpicofe/in_sdl.h"
 
 static SDL_Surface* screen;
 
@@ -336,6 +337,15 @@ static void buffer_scale(unsigned w, unsigned h, size_t pitch, const void *src) 
 
 //begin PLATFORM_SF3000
 
+// Declare the external event handler from in_sdl.c
+//extern void in_sdl_event_handler(void *event_);
+
+// Redirect plat_sdl_event_handler to the external handler
+void plat_sdl_event_handler(void *event_)
+{
+    ext_event_handler(event_);
+}
+
 struct audio_state {
 	unsigned buf_w;
 	unsigned max_buf_w;
@@ -351,6 +361,74 @@ struct audio_state audio;
 static char msg[HUD_LEN];
 static unsigned msg_priority = 0;
 static unsigned msg_expire = 0;
+
+// Initialize the framebuffer buffer
+int buffer_init(void) {
+    buffer.width = SCREEN_WIDTH;
+    buffer.height = SCREEN_HEIGHT;
+    buffer.depth = SCREEN_BPP;
+    buffer.pitch = buffer.width * (SCREEN_BPP / 8);
+    buffer.size = buffer.pitch * buffer.height;
+
+    // Allocate memory for the buffer
+    buffer.virAddr = malloc(buffer.size);
+    if (!buffer.virAddr) {
+        PA_ERROR("Failed to allocate memory for framebuffer\n");
+        return -1;
+    }
+
+    // Clear the buffer
+    memset(buffer.virAddr, 0, buffer.size);
+
+    PA_INFO("buffer_init() completed for sf3000\n");
+	return 0;
+}
+
+// Clean up the framebuffer buffer
+void buffer_quit(void) {
+    if (buffer.virAddr) {
+        free(buffer.virAddr);
+        buffer.virAddr = NULL;
+    }
+
+    buffer.width = 0;
+    buffer.height = 0;
+    buffer.depth = 0;
+    buffer.pitch = 0;
+    buffer.size = 0;
+
+    PA_INFO("buffer_quit() completed for sf3000\n");
+}
+
+// Scale the source image to the framebuffer
+int buffer_scale(int w, int h, int pitch, const void *data) {
+    SDL_Surface *src_surface = SDL_CreateRGBSurfaceFrom(
+        (void *)data, w, h, SCREEN_BPP, pitch,
+        0x00FF0000,  // Red mask
+        0x0000FF00,  // Green mask
+        0x000000FF,  // Blue mask
+        0xFF000000   // Alpha mask
+    );
+	return 0;
+
+    if (!src_surface) {
+        PA_ERROR("Failed to create source surface: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    SDL_Rect dst_rect = { 0, 0, buffer.width, buffer.height };
+    if (SDL_BlitSurface(src_surface, NULL, screen, &dst_rect) < 0) {
+        PA_ERROR("SDL_BlitSurface failed: %s\n", SDL_GetError());
+		return -1;
+    }
+
+    SDL_FreeSurface(src_surface);
+
+    if (SDL_Flip(screen) < 0) {
+        PA_ERROR("SDL_Flip failed: %s\n", SDL_GetError());
+		return -1;
+    }
+}
 
 static void video_expire_msg(void)
 {
@@ -734,9 +812,53 @@ void plat_sound_resize_buffer(void) {
 	SDL_UnlockAudio();
 }
 
+/*
 void plat_sdl_event_handler(void *event_)
 {
+    SDL_Event *event = (SDL_Event *)event_;
+
+    switch (event->type) {
+        case SDL_KEYDOWN:
+            // Handle key press
+            PA_INFO("Key pressed: %s (SDL keycode: %d)\n", SDL_GetKeyName(event->key.keysym.sym), event->key.keysym.sym);
+            in_sdl_key_down(event->key.keysym.sym);
+            break;
+
+        case SDL_KEYUP:
+            // Handle key release
+            PA_INFO("Key released: %s (SDL keycode: %d)\n", SDL_GetKeyName(event->key.keysym.sym), event->key.keysym.sym);
+            in_sdl_key_up(event->key.keysym.sym);
+            break;
+
+        case SDL_QUIT:
+            // Handle quit event (e.g., window close)
+            PA_INFO("Quit event received\n");
+            exit(0);
+            break;
+
+        case SDL_MOUSEBUTTONDOWN:
+            // Handle mouse button press
+            PA_INFO("Mouse button %d pressed at (%d, %d)\n",
+                    event->button.button, event->button.x, event->button.y);
+            break;
+
+        case SDL_MOUSEBUTTONUP:
+            // Handle mouse button release
+            PA_INFO("Mouse button %d released at (%d, %d)\n",
+                    event->button.button, event->button.x, event->button.y);
+            break;
+
+        case SDL_MOUSEMOTION:
+            // Handle mouse motion
+            PA_INFO("Mouse moved to (%d, %d)\n", event->motion.x, event->motion.y);
+            break;
+
+        default:
+            // Handle other events if necessary
+            break;
+    }
 }
+*/
 
 int plat_init(void)
 {
@@ -745,12 +867,17 @@ int plat_init(void)
         return -1;
     }
 	screen = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8, SDL_SWSURFACE);
+	PA_INFO("Using Framebuffer: %s\n", getenv("SDL_FBDEV"));
 	if (screen == NULL) {
 		PA_ERROR("%s, failed to set video mode\n", __func__, SDL_GetError());
 		return -1;
 	}
 	
-	clean_screen = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8, 0, 0, 0, 0);
+	clean_screen = SDL_CreateRGBSurface(SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8,
+                                    0x00FF0000,  // Red mask
+                                    0x0000FF00,  // Green mask
+                                    0x000000FF,  // Blue mask
+                                    0xFF000000); // Alpha mask
 	if (clean_screen == NULL) {
 		PA_ERROR("%s, SDL_CreateRGBSurface failed: %s\n", __func__, SDL_GetError());
 		return -1;
@@ -764,7 +891,6 @@ int plat_init(void)
 	g_menuscreen_h = SCREEN_HEIGHT;
 	g_menuscreen_pp = SCREEN_WIDTH;
 	g_menuscreen_ptr = NULL;
-
 	g_menubg_src_w = SCREEN_WIDTH;
 	g_menubg_src_h = SCREEN_HEIGHT;
 	g_menubg_src_pp = SCREEN_WIDTH;
@@ -779,6 +905,7 @@ int plat_init(void)
 		PA_ERROR("SDL sound failed to init: %s\n", SDL_GetError());
 		return -1;
 	}
+	printf("Framebuffer resolution: %dx%d, color depth: %d bpp\n", SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP * 8);
 	return 0;
 }
 

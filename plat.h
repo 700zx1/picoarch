@@ -5,6 +5,11 @@
 
 // Define sample rate for audio after SDL1.2 conversion
 #define SAMPLE_RATE 48000
+// Define Screen Width and Height and Bits Per Pixel
+#define SCREEN_WIDTH 480
+#define SCREEN_HEIGHT 854
+#define SCREEN_BPP 32  // Match the framebuffer's color depth
+#define SCREEN_PITCH (SCREEN_WIDTH * (SCREEN_BPP / 8))
 
 struct audio_frame {
 	int16_t left;
@@ -12,6 +17,15 @@ struct audio_frame {
 };
 
 #define HUD_LEN 41
+
+struct GFX_Buffer {
+    void *virAddr;
+    int width;
+    int height;
+    int depth;
+    int pitch;
+    size_t size;
+};
 
 int  plat_init(void);
 int  plat_reinit(void);

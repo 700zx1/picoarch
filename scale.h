@@ -1,10 +1,12 @@
 #ifndef __SCALE_H__
 #define __SCALE_H__
 
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
-#define SCREEN_BPP 2
+#ifndef PLATFORM_SF3000
+#define SCREEN_WIDTH 1280
+#define SCREEN_HEIGHT 960
+#define SCREEN_BPP 32
 #define SCREEN_PITCH (SCREEN_BPP * SCREEN_WIDTH)
+#endif
 
 enum scale_size {
 	SCALE_SIZE_NONE,

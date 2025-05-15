@@ -77,7 +77,7 @@ else ifeq ($(platform), sf3000)
 	LDFLAGS += -mips32r2 -march=mips32r2 -mtune=24kc -mfp32 -mhard-float
 
 	# Ensure consistent ABI settings
-	CFLAGS += -mno-abicalls -fno-pic
+	CFLAGS += -mno-abicalls -fno-pic -g -DDEBUG
 	LDFLAGS += -mno-abicalls -fno-pic
 else ifeq ($(platform), unix)
 	OBJS += plat_linux.o

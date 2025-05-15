@@ -7,6 +7,7 @@
 #include "options.h"
 #include "scale.h"
 #include "scaler_neon.h"
+#include "plat.h"
 
 typedef void (*scaler_t)(unsigned w, unsigned h, size_t pitch, const void *src, void *dst);
 
